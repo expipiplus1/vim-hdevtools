@@ -330,9 +330,11 @@ function! s:infowin_create(window_title)
   " perform cleanup using an autocmd to ensure we don't get caught out by some
   " unexpected means of dismissing or leaving the Info Window (eg. <C-W q>,
   " <C-W k> etc)
-  autocmd! * <buffer>
-  autocmd BufLeave <buffer> silent! call hdevtools#infowin_leave()
-  autocmd BufUnload <buffer> silent! call s:infowin_unload()
+  " autocmd! * <buffer>
+  " autocmd BufLeave <buffer> silent! call hdevtools#infowin_leave()
+  augroup hdevtools_infowin
+      autocmd BufUnload <buffer> silent! call s:infowin_unload()
+  augroup END
 endfunction
 
 function! s:settings_save()
@@ -583,7 +585,7 @@ function! hdevtools#type()
   call b:hdevtools_type.highlight(s:highlight_group())
 
   augroup hdevtools-type-highlight
-    autocmd! * <buffer>
+    " autocmd! * <buffer>
     autocmd BufEnter <buffer> call s:on_enter()
     autocmd WinEnter <buffer> call s:on_enter()
     autocmd BufLeave <buffer> call s:on_leave()
