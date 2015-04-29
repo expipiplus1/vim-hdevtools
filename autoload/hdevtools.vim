@@ -48,17 +48,11 @@ function! hdevtools#go_file(opencmd)
 endfunction
 
 function! hdevtools#info(identifier)
+  let l:initial_window = winnr()
   let l:identifier = a:identifier
 
   if l:identifier ==# ''
     " No identifier argument given, probably called from a keyboard shortcut
-
-    if bufnr('%') == s:hdevtools_info_buffer
-      " The Info Window is already open and active, so simply close it and
-      " finish
-      call hdevtools#infowin_leave()
-      return
-    endif
 
     " Get the identifier under the cursor
     let l:identifier = hdevtools#extract_identifier(getline("."), col("."))
@@ -78,6 +72,8 @@ function! hdevtools#info(identifier)
   let l:output = system(l:cmd)
 
   let l:lines = split(l:output, '\n')
+  " append a newline
+  call add(l:lines, "")
 
   " Check if the call to hdevtools info succeeded
   if v:shell_error != 0
@@ -87,15 +83,11 @@ function! hdevtools#info(identifier)
     return
   endif
 
-  " Create a new window
-  call s:infowin_create("(" . l:identifier . ")")
+  " Create or reuse the info window
+  call s:infowin_create()
 
   " Adjust the height of the Info Window so that all lines will fit
-  exe 'resize ' (len(l:lines) + 1)
-
-  " The result returned from the 'info' command is very similar to regular
-  " haskell code, so Haskell syntax highlighting looks good on it
-  setlocal filetype=haskell
+  exe 'resize ' (len(l:lines))
 
   " Fill the contents of the Info Window with the result
   setlocal modifiable
@@ -114,10 +106,9 @@ function! hdevtools#info(identifier)
     endif
   endfor
 
-  " Apply syntax highlighting for these comments: -- Defined at Hello.hs:12:5
-  " These are turned into links that can be jumped to
-  syntax match HdevtoolsInfoLink '-- Defined at \zs\S\+:\d\+:\d\+' containedin=ALL contained
-  highlight link HdevtoolsInfoLink Underlined
+  " switch back to original window
+  " The user can go to the info window with previous window command <C-w><C-p>
+  exe l:initial_window . "wincmd w"
 endfunction
 
 function! hdevtools#findsymbol(identifier, srcFiles)
@@ -288,23 +279,24 @@ endfunction
 " Command-T:
 "     https://wincent.com/products/command-t/
 
-function! s:infowin_create(window_title)
-  let s:initial_window = winnr()
-  call s:window_dimensions_save()
+function! s:infowin_create()
 
-  " The following settings are global, so they must be saved before being
-  " changed so that they can be later restored.
-  " If you add to the code below changes to additional global settings, then
-  " you must also appropriately modify s:settings_save and s:settings_restore
-  call s:settings_save()
-  set noinsertmode     " don't make Insert mode the default
-  set report=9999      " don't show 'X lines changed' reports
-  set sidescroll=0     " don't sidescroll in jumps
-  set sidescrolloff=0  " don't sidescroll automatically
-  set noequalalways    " don't auto-balance window sizes
+  if s:hdevtools_info_buffer != -1
+    let l:info_window = bufwinnr(s:hdevtools_info_buffer)
+    if l:info_window != -1
+      exe l:info_window . "wincmd w"
+      exe 'buffer ' . s:hdevtools_info_buffer
+      return
+    endif
+  endif
 
-  " The following settings are local so they don't have to be saved
-  exe 'silent! botright 1split' fnameescape(a:window_title)
+    " The following settings are local so they don't have to be saved
+  exe 'silent! botright 1split' fnameescape("(Info)")
+  setlocal noinsertmode     " don't make Insert mode the default
+  setlocal report=9999      " don't show 'X lines changed' reports
+  setlocal sidescroll=0     " don't sidescroll in jumps
+  setlocal sidescrolloff=0  " don't sidescroll automatically
+  setlocal noequalalways    " don't auto-balance window sizes
   setlocal bufhidden=unload  " unload buf when no longer displayed
   setlocal buftype=nofile    " buffer is not related to any file
   setlocal nomodifiable      " prevent manual edits
@@ -319,102 +311,32 @@ function! s:infowin_create(window_title)
   setlocal nobuflisted       " don't show up in the buffer list
   setlocal textwidth=0       " don't hard-wrap (break long lines)
 
+  " The result returned from the 'info' command is very similar to regular
+  " haskell code, so Haskell syntax highlighting looks good on it
+  setlocal filetype=haskell
+
+  "Depending on what type of split, make sure the info buffer is not
+  "automatically rezised by CTRL + W =, etc...
+  setlocal winfixheight
+  setlocal winfixwidth
+
   " Save the buffer number of the Info Window for later
   let s:hdevtools_info_buffer = bufnr("%")
 
   " Key bindings for the Info Window
   nnoremap <silent> <buffer> <CR> :call hdevtools#infowin_jump()<CR>
   nnoremap <silent> <buffer> <C-CR> :call hdevtools#infowin_jump('sp')<CR>
-  nnoremap <silent> <buffer> <ESC> :call hdevtools#infowin_leave()<CR>
+  nnoremap <silent> <buffer> <ESC> :call hdevtools#infowin_close()<CR>
 
-  " perform cleanup using an autocmd to ensure we don't get caught out by some
-  " unexpected means of dismissing or leaving the Info Window (eg. <C-W q>,
-  " <C-W k> etc)
-  " autocmd! * <buffer>
-  " autocmd BufLeave <buffer> silent! call hdevtools#infowin_leave()
-  augroup hdevtools_infowin
-      autocmd BufUnload <buffer> silent! call s:infowin_unload()
-  augroup END
-endfunction
-
-function! s:settings_save()
-  " The following must be in sync with settings_restore
-  let s:original_settings = [
-        \ &report,
-        \ &sidescroll,
-        \ &sidescrolloff,
-        \ &equalalways,
-        \ &insertmode
-        \ ]
-endfunction
-
-function! s:settings_restore()
-  " The following must be in sync with settings_save
-  let &report = s:original_settings[0]
-  let &sidescroll = s:original_settings[1]
-  let &sidescrolloff = s:original_settings[2]
-  let &equalalways = s:original_settings[3]
-  let &insertmode = s:original_settings[4]
-endfunction
-
-function! s:window_dimensions_save()
-  " Each element of the list s:window_dimensions is a list of 3 integers of
-  " the form: [id, width, height]
-  let s:window_dimensions = []
-  for l:i in range(1, winnr("$"))
-    call add(s:window_dimensions, [l:i, winwidth(i), winheight(i)])
-  endfor
-endfunction
-
-" Used in s:window_dimensions_restore for sorting the windows
-function! hdevtools#compare_window(i1, i2)
-  " Compare the window heights:
-  if a:i1[2] < a:i2[2]
-    return 1
-  elseif a:i1[2] > a:i2[2]
-    return -1
-  endif
-  " The heights were equal, so compare the widths:
-  if a:i1[1] < a:i2[1]
-    return 1
-  elseif a:i1[1] > a:i2[1]
-    return -1
-  endif
-  " The widths were also equal:
-  return 0
-endfunction
-
-function! s:window_dimensions_restore()
-  " sort from tallest to shortest, tie-breaking on window width
-  call sort(s:window_dimensions, "hdevtools#compare_window")
-
-  " starting with the tallest ensures that there are no constraints preventing
-  " windows on the side of vertical splits from regaining their original full
-  " size
-  for l:i in s:window_dimensions
-    let l:id = l:i[0]
-    let l:width = l:i[1]
-    let l:height = l:i[2]
-    exe l:id . "wincmd w"
-    exe "resize" l:height
-    exe "vertical resize" l:width
-  endfor
-endfunction
-
-function! hdevtools#infowin_leave()
-  call s:infowin_close()
-  call s:infowin_unload()
-  let s:hdevtools_info_buffer = -1
-endfunction
-
-function! s:infowin_unload()
-  call s:window_dimensions_restore()
-  call s:settings_restore()
-  exe s:initial_window . "wincmd w"
+  " Apply syntax highlighting for these comments: -- Defined at Hello.hs:12:5
+  " These are turned into links that can be jumped to
+  syntax match HdevtoolsInfoLink '-- Defined at \zs\S\+:\d\+:\d\+' containedin=ALL contained
+  highlight link HdevtoolsInfoLink Underlined
 endfunction
 
 function! s:infowin_close()
   exe "silent! bunload!" s:hdevtools_info_buffer
+  let s:hdevtools_info_buffer = -1
 endfunction
 
 " Jumps to the location under the cursor.
@@ -441,8 +363,8 @@ function! hdevtools#infowin_jump(...)
   let l:row = l:m[2]
   let l:col = l:m[3]
 
-  " Get rid of the Info Window; the user doesn't need it anymore
-  call hdevtools#infowin_leave()
+  " Switch to the previous window
+  exe "normal \<C-w>\<C-p>"
 
   " Open the file in a window as appropriate
   if a:0 > 0 && a:1 !=# ''
