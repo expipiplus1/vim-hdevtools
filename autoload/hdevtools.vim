@@ -47,6 +47,45 @@ function! hdevtools#go_file(opencmd)
   exe a:opencmd fnameescape(l:lines[0])
 endfunction
 
+function! hdevtools#signature()
+  " Get the identifier under the cursor
+  let l:identifier = s:extract_identifier(getline("."), col("."))
+
+  if l:identifier ==# ''
+    echo '-- No Identifier Under Cursor'
+    return
+  endif
+
+  let l:file = expand('%')
+  if l:file ==# ''
+    call hdevtools#print_warning("hdevtools#signature: current version of hdevtools.vim doesn't support running on an unnamed buffer.")
+    return
+  endif
+  let l:cmd = hdevtools#build_command('info', shellescape(l:file) . ' -- ' . shellescape(l:identifier))
+  let l:output = system(l:cmd)
+
+  let l:lines = split(l:output, '\n')
+
+  " Check if the call to hdevtools info succeeded
+  if v:shell_error != 0
+    for l:line in l:lines
+      call hdevtools#print_error(l:line)
+    endfor
+    return
+  endif
+
+  let l:locs = matchlist(l:lines[-1], '-- Defined at \S\+:\(\d\+\):\(\d\+\)')
+  if (l:locs[1] ==# '') || (l:locs[2] ==# '')
+    call hdevtools#print_warning("hdevtools#signature: hdevtool output was not understood")
+    return
+  endif
+
+  " Strip definition location
+  let l:lines = l:lines[0:-2]
+
+  call append(l:locs[1]-1, l:lines)
+endfunction
+
 function! hdevtools#info(identifier)
   let l:identifier = a:identifier
 
