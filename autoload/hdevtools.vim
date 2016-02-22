@@ -83,7 +83,7 @@ function! hdevtools#signature()
   " Strip definition location
   let l:lines = l:lines[0:-2]
 
-  call append(l:locs[1]-1, l:lines)
+  call append(line(".")-1, l:lines)
 endfunction
 
 function! hdevtools#info(identifier)
