@@ -49,7 +49,7 @@ endfunction
 
 function! hdevtools#signature()
   " Get the identifier under the cursor
-  let l:identifier = s:extract_identifier(getline("."), col("."))
+  let l:identifier = hdevtools#extract_identifier(getline("."), col("."))
 
   if l:identifier ==# ''
     echo '-- No Identifier Under Cursor'
