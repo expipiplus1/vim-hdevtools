@@ -6,7 +6,7 @@ let b:did_ftplugin_hdevtools = 1
 if !exists('s:has_hdevtools')
   let s:has_hdevtools = 0
 
-  if !executable('hdevtools')
+  if !executable('stack exec -- hdevtools')
     call hdevtools#print_error('hdevtools: hdevtools is not executable!')
     finish
   endif
