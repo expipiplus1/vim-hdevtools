@@ -333,6 +333,7 @@ function! s:infowin_create()
   exe 'silent! botright 1split' fnameescape("(Info)")
   setlocal noinsertmode     " don't make Insert mode the default
   setlocal report=9999      " don't show 'X lines changed' reports
+  setlocal scrolloff=0      " no scrolloff
   setlocal sidescroll=0     " don't sidescroll in jumps
   setlocal sidescrolloff=0  " don't sidescroll automatically
   setlocal noequalalways    " don't auto-balance window sizes
