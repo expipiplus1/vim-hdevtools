@@ -374,7 +374,7 @@ function! s:infowin_create()
   highlight link HdevtoolsInfoLink Underlined
 endfunction
 
-function! s:infowin_close()
+function! hdevtools#infowin_close()
   exe "silent! bunload!" s:hdevtools_info_buffer
   let s:hdevtools_info_buffer = -1
 endfunction
